@@ -1,0 +1,53 @@
+import logo from '../assets/svgs/logo.svg';
+import avatar from '../assets/img/avatar.jpg';
+import { Link } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+
+
+const DashboardHeader = () => {
+    const { userData } = useSelector((state) => state.auth);
+    return (
+        <nav className="navbar navbar-expand-lg bg-body-tertiary custom-nav px-3">
+            <div className="container-fluid">
+                <button className="nav-link px-3 text-white d-lg-none"
+                    type="button"
+                    data-bs-toggle="offcanvas"
+                    data-bs-target="#sidebarMenu"
+                    aria-controls="sidebarMenu"
+                    aria-expanded="false"
+                    aria-label="Toggle navigation">
+                    Open
+                </button>
+                <Link to={"/"} className="navbar-brand" >
+                    <img src={logo} width="150px" alt='logo' />
+                </Link>
+                <div className="navbar" id="navbarSupportedContent">
+                    <ul className="navbar-nav me-auto mb-2 mb-lg-0">
+                        <li></li>
+                    </ul>
+                    <div className="d-flex">
+                        <div className="dropdown">
+                            <Link to="/" className="nav-link dropdown-toggle nav-user d-flex align-items-center gap-2" data-bs-toggle="dropdown" role="button" aria-haspopup="false" aria-expanded="false">
+                                <span className="account-user-avatar mr-3">
+                                    <img src={avatar} alt="User Avatar" width="36" className="rounded-circle" />
+                                </span>
+                                <span>
+                                    <h6 className="my-0 text-light">{userData?.name}</h6>
+                                </span>
+                            </Link>
+                            <div className="dropdown-menu dropdown-menu-end dropdown-menu-animated profile-dropdown" >
+                                <div className=" dropdown-header noti-title">
+                                    <h6 className="text-overflow m-0">Welcome !</h6>
+                                </div>
+                                <div className="dropdown-item">
+                                    <span>My Account</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    );
+};
+export default DashboardHeader;
