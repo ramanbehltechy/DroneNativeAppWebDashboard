@@ -8,8 +8,15 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from "yup";
 import { Autocomplete } from '@react-google-maps/api';
 import { timeZoneRequest } from '../redux/reducers/timeZoneSlice';
+import { editShowRequest, editShowSuccess } from '../redux/reducers/editSlice';
+import cross from '../assets/svgs/cross.svg'
 
 const AddShowForm = ({ setMapData }) => {
+    const [showAudioPlayer, setShowAudioPlayer] = useState({
+        preShowFile:false,
+        file:false,
+        postShowFile:false,
+     });
     const schema = yup.object({
         address: yup.string().required('Address is required'),
         latitude: yup.number().typeError('Latitude must be a valid number').min(-90, 'Latitude must be between -90 and 90').max(90, 'Latitude must be between -90 and 90').required('Latitude is required'),
@@ -27,13 +34,15 @@ const AddShowForm = ({ setMapData }) => {
                 }
                 return true;
             }),
-        file: yup.mixed().required('MP3 file is required')
+            ...(!showAudioPlayer.file && 
+        {file: yup.mixed().required('MP3 file is required')
             .test('fileType', 'Only mp3 files are allowed', (value) => {
                 if (value) {
                     return value.type === 'audio/mpeg';
                 }
                 return false;
-            }),
+            })}
+    ),
         postShowFile: yup.mixed().nullable()
             .test('fileType', 'Only mp3 files are allowed', (value) => {
                 if (value && value.type !== 'audio/mpeg') {
@@ -45,6 +54,8 @@ const AddShowForm = ({ setMapData }) => {
     const navigate = useNavigate();
     const dispatch = useDispatch();
     const { postShow: { loading, res }, timeZone: { res: timeZoneRes, error: timeZoneError } } = useSelector((state) => state);
+    const editingItem=useSelector((state)=>state.edit.editingItem)
+    const {response,load}=useSelector((state)=>state.editShow)
     const { register, setValue, handleSubmit, formState: { errors }, trigger } = useForm({
         resolver: yupResolver(schema)
     });
@@ -52,8 +63,8 @@ const AddShowForm = ({ setMapData }) => {
     const [formStep, setFormStep] = useState(0);
     const [formData, setFormData] = useState({
         address: "",
-        latitude: "",
-        longitude: "",
+        latitude:editingItem?editingItem.location.coordinates[1]: "",
+        longitude:editingItem?editingItem.location.coordinates[0] :"",
         showTitle: "",
         description: "",
         date: "",
@@ -62,8 +73,18 @@ const AddShowForm = ({ setMapData }) => {
         radius: 10,
         preShowFile: [],
         postShowFile: [],
-        file: []
+        file: [],
+        ...editingItem
     });
+        useEffect(()=>{
+            if(editingItem){
+                setShowAudioPlayer({
+                    preShowFile:!!editingItem?.premp3,
+                    file:!!editingItem?.mainmp3,
+                    postShowFile:!!editingItem?.postmp3,
+                });
+            }
+        },[editingItem])
 
     useEffect(() => {
         if (res?.success) {
@@ -75,7 +96,16 @@ const AddShowForm = ({ setMapData }) => {
             dispatch(postShowSuccess(null));
 
         }
-    }, [res, navigate, dispatch]);
+        if(response?.success){
+            toast(response?.message);
+            dispatch(editShowSuccess(null));
+            navigate("/");
+         }
+         else {
+            toast(response?.message);
+            dispatch(editShowSuccess(null));}
+
+    }, [res, response,navigate, dispatch]);
 
     useEffect(() => {
         if (timeZoneRes?.status === 200) {
@@ -137,9 +167,37 @@ const AddShowForm = ({ setMapData }) => {
         for (const i in data) {
             formData.append(i, data[i]);
         }
-        dispatch(postShowRequest(formData));
-    }
-
+        
+            if(editingItem)
+            {
+                if(editingItem && editingItem.premp3){
+                    formData.append("premp3", editingItem.premp3?.fileName )
+                    if(!showAudioPlayer.preShowFile){
+                        formData.append("deletepremp3", true) 
+                    }
+                   }
+                   if(editingItem && editingItem.mainmp3){
+                    formData.append("mainmp3", editingItem.mainmp3?.fileName)
+                   }
+                   if(editingItem && editingItem.postmp3){
+                    formData.append("postmp3", editingItem.postmp3?.fileName ) 
+                    if(!showAudioPlayer.postShowFile){
+                        formData.append("deletepostmp3", true) 
+                    } 
+                   }
+      
+                   dispatch(editShowRequest({id:editingItem._id,formData}))
+            }
+            else{
+                dispatch(postShowRequest(formData));
+            }
+        
+        }
+        const removeFile=(fieldName)=>{
+            setFormData((prevValue) => ({ ...prevValue, [fieldName]: null }));
+            setValue(fieldName,null);
+            setShowAudioPlayer((prevValue) => ({ ...prevValue, [fieldName]: false }));
+        }
     const handleValidation = async () => {
         try {
             const validateData = await trigger(["address", 'latitude', 'longitude']);
@@ -230,7 +288,7 @@ const AddShowForm = ({ setMapData }) => {
                     </div>
                     <div className="mb-3">
                         <label htmlFor="startTime" className="form-label">Start Time</label>
-                        <input type="time" className="form-control" id="startTime" placeholder="Enter StartTime" name='startTime' {...register("startTime")} value={formData.startTime} onChange={updateFormData} />
+                        <input type="time" step="1" className="form-control" id="startTime" placeholder="Enter StartTime" name='startTime' {...register("startTime")} value={formData.startTime} onChange={updateFormData} />
                         {errors.startTime && <p className='text-danger'>{errors.startTime.message}</p>}
                     </div>
                     <div className="mb-3">
@@ -240,18 +298,46 @@ const AddShowForm = ({ setMapData }) => {
                     </div>
                     <div className="mb-3">
                         <label htmlFor="preShowFile" className="form-label">Pre show mp3 file</label>
-                        <input type="file" className="form-control" id="preShowFile" placeholder="Enter Longitude" name='preShowFile' onChange={updateFormData} />
-                        {errors.preShowFile && <p className='text-danger'>{errors.preShowFile.message}</p>}
+                        { editingItem && showAudioPlayer.preShowFile ? 
+                        (<div className='audio-tag'>
+                            <audio src={`${process.env.REACT_APP_SERVER_API}${editingItem.premp3.filePath}`} controls/>
+                            <img  src={cross} width="20px" alt='cross' onClick={()=>removeFile('preShowFile')}  className="cross-icon"/>
+                        </div>)
+                        :
+                        <>
+                        <input type="file" className="form-control" id="preShowFile" placeholder="Enter Longitude" name='preShowFile' onChange={updateFormData} />                
+                        </>}
+                        {errors?.preShowFile && <p className='text-danger'>{errors.preShowFile.message}</p>}
+
                     </div>
                     <div className="mb-3">
                         <label htmlFor="file" className="form-label">Upload mp3</label>
-                        <input type="file" className="form-control" id="file" placeholder="Enter Longitude" name='file' onChange={updateFormData} />
-                        {errors.file && <p className='text-danger'>{errors.file.message}</p>}
+                        { editingItem &&  showAudioPlayer.file ?
+                    (    <div className='audio-tag'>
+                         <audio src={`${process.env.REACT_APP_SERVER_API}${editingItem.mainmp3.filePath}`} controls/>
+                         <img  src={cross} width="20px" alt='cross' onClick={()=>removeFile('file')} className="cross-icon"/>
+                         </div>)
+                         :
+                    (   <>
+                         <input type="file" className="form-control" id="file" placeholder="Enter Longitude" name='file' onChange={updateFormData} />
+                        </>) }
+                        {errors?.file && <p className='text-danger'>{errors.file.message}</p>}
+
                     </div>
                     <div className="mb-3">
                         <label htmlFor="postShowFile" className="form-label">Post show Upload mp3</label>
+                        { editingItem &&  showAudioPlayer.postShowFile ?
+                        ( <div className='audio-tag'>
+                         <audio src={`${process.env.REACT_APP_SERVER_API}${editingItem.postmp3.filePath}`} controls/>
+                         <img  src={cross} width="20px" alt='cross' onClick={()=>removeFile('postShowFile')} className="cross-icon"/>
+                         
+                      </div>)
+                         :
+                        <>
                         <input type="file" className="form-control" id="postShowFile" placeholder="Enter Longitude" name='postShowFile' onChange={updateFormData} />
-                        {errors.postShowFile && <p className='text-danger'>{errors.postShowFile.message}</p>}
+                        </>
+            } 
+              {errors.postShowFile && <p className='text-danger'>{errors.postShowFile.message}</p>}               
                     </div>
                     <div className="row mt-5">
                         <div className="col-6">
@@ -261,7 +347,7 @@ const AddShowForm = ({ setMapData }) => {
                         </div>
                         <div className="col-6 text-end">
                             <button type="submit" disabled={loading} className="btn add-btn-custom" >
-                                {loading ? 'loading...' : 'Save'}
+                             {editingItem? (load ? 'loading...' : 'Update') : (loading ? 'loading...' : 'Save')} 
                             </button>
                         </div>
                     </div>

@@ -4,6 +4,7 @@ let initialState = {
   loading: false,
   error: null,
   isLoggedIn: false,
+  tokenData : null
 };
 
 const item = localStorage.getItem("item");
@@ -11,7 +12,8 @@ if (item) {
   let parseItem = JSON.parse(item);
   if (parseItem.token) {
     const decode = JSON.parse(atob(parseItem.token.split('.')[1]));
-    if (decode.exp * 1000 > new Date().getTime()) {
+    initialState.tokenData = decode;
+    if (decode.exp  > new Date().getTime() / 1000) {
       initialState.isLoggedIn = true
       initialState.userData = parseItem.userData
     }
@@ -30,11 +32,13 @@ const loginSlice = createSlice({
       state.isLoggedIn = true;
       state.res = action.payload;
       state.userData = action.payload.userData;
+      state.tokenData = action.payload.tokenData;
     },
     loginFailure: (state, action) => {
       state.loading = false;
       state.res = action.payload;
       state.isLoggedIn = false;
+      state.tokenData = null;
     },
     logoutRequest: (state) => {
       state.loading = true;
@@ -44,6 +48,7 @@ const loginSlice = createSlice({
       state.isLoggedIn = false;
       state.res = null;
       state.userData = null;
+      state.tokenData = null;
     }
   }
 });
